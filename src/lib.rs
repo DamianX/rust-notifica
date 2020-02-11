@@ -124,25 +124,32 @@ impl Platform for Windows {
         use winrt::windows::ui::notifications::*;
         use winrt::*;
         let toast_xml =
-            ToastNotificationManager::get_template_content(ToastTemplateType::ToastText02)?.unwrap();
-        let toast_text_elements =
-            toast_xml.get_elements_by_tag_name(&FastHString::new("text"))?.unwrap();
+            ToastNotificationManager::get_template_content(ToastTemplateType::ToastText02)?
+                .unwrap();
+        let toast_text_elements = toast_xml
+            .get_elements_by_tag_name(&FastHString::new("text"))?
+            .unwrap();
 
         toast_text_elements.item(0)?.unwrap().append_child(
             &*toast_xml
-                .create_text_node(&FastHString::from(msg_title))?.unwrap()
-                .query_interface::<IXmlNode>().unwrap(),
+                .create_text_node(&FastHString::from(msg_title))?
+                .unwrap()
+                .query_interface::<IXmlNode>()
+                .unwrap(),
         )?;
         toast_text_elements.item(1)?.unwrap().append_child(
             &*toast_xml
-                .create_text_node(&FastHString::from(msg_body))?.unwrap()
-                .query_interface::<IXmlNode>().unwrap(),
+                .create_text_node(&FastHString::from(msg_body))?
+                .unwrap()
+                .query_interface::<IXmlNode>()
+                .unwrap(),
         )?;
 
         let toast = ToastNotification::create_toast_notification(&*toast_xml)?;
         ToastNotificationManager::create_toast_notifier_with_id(&FastHString::new(
             "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe",
-        ))?.unwrap()
+        ))?
+        .unwrap()
         .show(&*toast)?;
         Ok(())
     }
@@ -203,4 +210,24 @@ pub fn notify(msg_title: &str, msg_body: &str) -> Result<(), Box<dyn StdError>> 
     CurrPlatform::setup();
     CurrPlatform::notify(msg_title, msg_body)?;
     Ok(())
+}
+
+use std::ffi::CStr;
+
+unsafe fn notify_raw_impl(
+    msg_title_raw: *const libc::c_char,
+    msg_body_raw: *const libc::c_char,
+) -> Result<usize, usize> {
+    let msg_title = CStr::from_ptr(msg_title_raw).to_str().map_err(|_| 1usize)?;
+    let msg_body = CStr::from_ptr(msg_body_raw).to_str().map_err(|_| 1usize)?;
+    notify(msg_title, msg_body).map_err(|_| 1usize)?;
+    Ok(0usize)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn notify_raw(
+    msg_title_raw: *const libc::c_char,
+    msg_body_raw: *const libc::c_char,
+) -> usize {
+    notify_raw_impl(msg_title_raw, msg_body_raw).unwrap()
 }
